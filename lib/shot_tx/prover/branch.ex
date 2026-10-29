@@ -90,7 +90,8 @@ defmodule ShotTx.Prover.Branch do
             term_ids: MapSet.new(),
             pending_closure: nil,
             frontier: MapSet.new(),
-            frontier_version: 0
+            frontier_version: 0,
+            lemma_seq: 0
 
   @type t :: %__MODULE__{}
 
@@ -165,6 +166,30 @@ defmodule ShotTx.Prover.Branch do
   ##############################################################################
   # STEP / EXECUTION LOGIC
   ##############################################################################
+
+  @doc """
+  Adds `lemmas`, closed formulas that follow from the input, to the branch like
+  its initial formulas, recorded as `{nil, :lemma, lemmas}`, and remembers `seq`
+  as the last lemma row taken (`Parameters.lemma_table`).
+  """
+  @spec add_lemmas(t(), [Term.term_id()], non_neg_integer(), Parameters.t()) :: t()
+  def add_lemmas(%__MODULE__{} = branch, [], seq, _params), do: %{branch | lemma_seq: seq}
+
+  def add_lemmas(%__MODULE__{} = branch, lemmas, seq, params) do
+    {expanded, lift_history} = lift_user_formulas(lemmas)
+
+    branch = %{
+      branch
+      | lemma_seq: seq,
+        history: lift_history ++ [{nil, :lemma, lemmas} | branch.history],
+        type_universe: MapSet.union(branch.type_universe, TypeUniverse.from_formulas(expanded))
+    }
+
+    expanded
+    |> Enum.reduce(branch, &insert_formula(&2, &1, branch.defs, params))
+    |> then(fn b -> Enum.reduce(expanded, b, &ingest_formula(&2, &1, params)) end)
+    |> flush_rewrites()
+  end
 
   @doc """
   Splices a synthetic `{:suggested_instantiate, recipe, term}` rule onto

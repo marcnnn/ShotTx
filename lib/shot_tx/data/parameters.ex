@@ -37,6 +37,7 @@ defmodule ShotTx.Data.Parameters do
   | `iterative_deepening` | `true` | When `true`, the `Manager` bumps `gamma_limit` and `prim_depth_limit` by 1 every time all workers stall, then wakes parked branches. When `false`, deepening never fires: once workers are all idle the prover returns `:unknown` with the initial limits. Use with elevated `initial_gamma_limit` / `initial_prim_limit` to run at a fixed depth. |
   | `formula_cost_strategy` | `:default` | Named cost function used by `FormulaPqueue`; resolved at prove-time to `formula_cost`. `:default` → `Rules.rule_cost/1`. `:uniform` → constant cost (breadth-first over the rule queue). `:depth_first` → penalises rules that generate many children (β / prim-subst) so simple decompositions run to completion first. `{:custom, fun}` bypasses the strategy and uses `fun` directly. |
   | `pure_o_models_only` | `true` | When `true`, a saturated open branch (or an external model finder) is reported as a model only if every type in the input is pure-`o` (see `ShotTx.Prover.Rules.pure_o_type?/1`). For any other problem the answer is `{:unknown, :saturation_not_pure_o}`: saturation under bounded γ-instantiation is not a certified countermodel once infinite domains are involved. Set to `false` to report every saturated branch as a model (the v0.1 behaviour). |
+  | `lemma_table` | `nil` | A public ETS table (`:ordered_set`) of `{seq, term_id}` rows from which workers add lemmas to every branch they check out: closed formulas that follow from the input, proved by someone else (Astraea). Each branch takes every row once, in `seq` order. Rows may be inserted while the proof runs. Adding a consequence of the input is a cut, so it keeps refutations and models sound. `nil` disables it. |
   | `progress_interval_ms` | `2_000` | Interval at which the `Manager` logs a one-line progress report during a proof. Set to `0` to silence the log entirely (useful for benchmark sweeps). |
   """
 
@@ -75,7 +76,8 @@ defmodule ShotTx.Data.Parameters do
             iterative_deepening: true,
             formula_cost_strategy: :default,
             pure_o_models_only: true,
-            progress_interval_ms: 2_000
+            progress_interval_ms: 2_000,
+            lemma_table: nil
 
   @type t :: %__MODULE__{
           timeout: pos_integer(),
@@ -112,6 +114,7 @@ defmodule ShotTx.Data.Parameters do
           formula_cost_strategy:
             :default | :uniform | :depth_first | {:custom, (Rules.rule_t() -> non_neg_integer())},
           pure_o_models_only: boolean(),
-          progress_interval_ms: non_neg_integer()
+          progress_interval_ms: non_neg_integer(),
+          lemma_table: :ets.table() | nil
         }
 end

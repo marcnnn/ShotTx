@@ -130,7 +130,7 @@ defmodule ShotTx.Prover.Worker do
         if poisoned?(branch.id, state.ets_tables) do
           {:noreply, working, {:continue, :process_next}}
         else
-          spliced = splice_suggestions(branch, working)
+          spliced = branch |> splice_lemmas(working) |> splice_suggestions(working)
           {:noreply, %{working | current_branch: spliced}, {:continue, :process_next}}
         end
 
@@ -146,7 +146,7 @@ defmodule ShotTx.Prover.Worker do
 
       steps >= state.params.worker_yield_limit ->
         Stats.incr(state.ets_tables, :worker_yields)
-        spliced = splice_suggestions(branch, state)
+        spliced = branch |> splice_lemmas(state) |> splice_suggestions(state)
         push_work(state.ets_tables, spliced)
 
         {:noreply, %{state | current_branch: nil, steps_since_yield: 0},
@@ -393,6 +393,22 @@ defmodule ShotTx.Prover.Worker do
 
   # Splices suggestions inherited from ancestors; `:ets.update_counter/3`
   # enforces the cascade cap atomically.
+  # Lemmas from `Parameters.lemma_table` the branch has not taken yet.
+  defp splice_lemmas(branch, %{params: %Parameters{lemma_table: nil}}), do: branch
+
+  defp splice_lemmas(branch, state) do
+    case :ets.select(state.params.lemma_table, [{{:"$1", :"$2"}, [{:>, :"$1", branch.lemma_seq}], [{{:"$1", :"$2"}}]}]) do
+      [] ->
+        branch
+
+      rows ->
+        Stats.incr(state.ets_tables, :lemmas_spliced, length(rows))
+        {seq, _} = Enum.max_by(rows, &elem(&1, 0))
+        lemmas = rows |> Enum.sort() |> Enum.map(&elem(&1, 1))
+        Branch.add_lemmas(branch, lemmas, seq, state.params)
+    end
+  end
+
   defp splice_suggestions(branch, %{params: %Parameters{suggestions_enabled: false}} = _state),
     do: branch
 

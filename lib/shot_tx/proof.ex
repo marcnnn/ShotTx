@@ -459,6 +459,10 @@ defmodule ShotTx.Proof do
     {[{:rule, src, :bdd_oracle, simplified} | evs], segs}
   end
 
+  defp interior_event({nil, :lemma, lemmas}, {evs, segs}) do
+    {fold_rule_events(:lemma, nil, lemmas, evs), segs}
+  end
+
   defp interior_event({_src, {:close_pair, _, _}, _}, state), do: state
   defp interior_event({_src, {:clash_candidates, _, _}, _}, state), do: state
 
