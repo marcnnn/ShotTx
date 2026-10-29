@@ -8,7 +8,7 @@ defmodule ShotTx.MixProject do
     [
       app: :shot_tx,
       version: @version,
-      elixir: "~> 1.20",
+      elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       test_ignore_filters: ["test/prover_case.exs"],
       deps: deps(),
